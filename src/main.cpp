@@ -1,17 +1,17 @@
 #include <Geode/Geode.hpp>
-#include <Geode/modify/PlayLayer.hpp>
-
 using namespace geode::prelude;
 
+#include <Geode/modify/PlayLayer.hpp>
 class $modify(MyPlayLayer, PlayLayer) {
-    void keyDown(enumKeyCodes key) {
-        if (key == enumKeyCodes::KEY_U) {
-            if (this->m_effectManager) {
-                this->m_effectManager->setItemCount(1, 13, false, 0);
-                Notification::create("Set Item ID 1 to 13!", NotificationIcon::Success)->show();
-            }
-        }
+	void keyDown(cocos2d::enumKeyCodes key) {
+		if (key == cocos2d::enumKeyCodes::KEY_U) {
+			log::debug("U pressed, m_effectManager is {}", fmt::ptr(this->m_effectManager));
 
-        PlayLayer::keyDown(key);
-    }
+			if (this->m_effectManager) {
+				// this->m_effectManager->countForItem(1);
+			}
+		}
+
+		PlayLayer::keyDown(key);
+	}
 };
