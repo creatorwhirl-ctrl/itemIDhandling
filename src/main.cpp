@@ -4,19 +4,26 @@ using namespace geode::prelude;
 #include <Geode/modify/PlayLayer.hpp>
 
 class $modify(MyPlayLayer, PlayLayer) {
-    // 1. Add the missing `double timestamp` parameter
     void keyDown(cocos2d::enumKeyCodes key, double timestamp) {
         if (key == cocos2d::enumKeyCodes::KEY_U) {
-            log::debug("U pressed, m_effectManager is {}", fmt::ptr(this->m_effectManager));
 
+            // 1. Create and show a popup window using FLAlertLayer
+            FLAlertLayer::create(
+                "Item Modified!",           // Title
+                "Item ID 1 count set to 5", // Message body
+                "OK"                        // Button text
+            )->show();
+
+            // 2. Change the Item ID count in the current level
             if (this->m_effectManager) {
-                // countForItem returns the current item/item-ID count
-                int count = this->m_effectManager->countForItem(1);
-                log::debug("Item ID 1 count: {}", count);
+                // updateItem modifies/sets the item count for the given ID
+                this->m_effectManager->updateItem(1, 5, false);
+                
+                log::info("Updated Item ID 1 to 5");
             }
         }
 
-        // 2. Pass both arguments to the base function call
+        // Call base GD function to keep regular key controls working
         PlayLayer::keyDown(key, timestamp);
     }
 };
