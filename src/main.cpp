@@ -5,7 +5,7 @@ using namespace geode::prelude;
 
 class $modify(MyPlayLayer, PlayLayer) {
 
-	void keyDown(cocos2d::enumKeyCodes key) {
+	void keyDown(cocos2d::enumKeyCodes key, double dt) {
 		if (key == cocos2d::enumKeyCodes::KEY_U) {
 
 			log::debug("U pressed. m_effectManager = {}", fmt::ptr(this->m_effectManager));
@@ -22,6 +22,7 @@ class $modify(MyPlayLayer, PlayLayer) {
 			}
 		}
 
-		PlayLayer::keyDown(key);
+		// Always forward to the original so other keybinds keep working.
+		PlayLayer::keyDown(key, dt);
 	}
 };
