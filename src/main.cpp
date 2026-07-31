@@ -7,6 +7,7 @@ using namespace geode::prelude;
 
 namespace {
     constexpr int kFirstItemID = 1225;
+	cosntexpr int kSecondItemID = 1200;
     constexpr int kItemCount = 16;
     std::array<int, kItemCount> g_itemClipboard{};
     bool g_hasCopied = false;
@@ -36,10 +37,10 @@ $execute {
                 if (event.key == cocos2d::enumKeyCodes::KEY_C) {
                     if (!pl || !pl->m_effectManager) return ListenerResult::Propagate;
                     for (int i = 0; i < kItemCount; i++) {
-                        g_itemClipboard[i] = pl->m_effectManager->countForItem(kFirstItemID + i);
+                        g_itemClipboard[i] = pl->m_effectManager->countForItem(kSecondItemID + i);
                     }
                     g_hasCopied = true;
-                    Notification::create(fmt::format("Copied items {}-{}", kFirstItemID, kFirstItemID + kItemCount - 1), NotificationIcon::Success, 1.0f)->show();
+                    Notification::create(fmt::format("Copied items {}-{}", kSecondItemID, kSecondItemID + kItemCount - 1), NotificationIcon::Success, 1.0f)->show();
                 }
                 else if (event.key == cocos2d::enumKeyCodes::KEY_V) {
                     if (!pl || !pl->m_effectManager) return ListenerResult::Propagate;
