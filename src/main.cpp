@@ -6,7 +6,7 @@
 using namespace geode::prelude;
 
 namespace {
-    constexpr int kFirstItemID = 1;
+    constexpr int kFirstItemID = 1225;
     constexpr int kItemCount = 16;
     std::array<int, kItemCount> g_itemClipboard{};
     bool g_hasCopied = false;
