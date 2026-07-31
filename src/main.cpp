@@ -1,16 +1,16 @@
 #include <Geode/Geode.hpp>
 #include <Geode/utils/Keyboard.hpp>
+#include <Geode/utils/general.hpp>
 #include <Geode/ui/Notification.hpp>
 #include <array>
+#include <sstream>
 
 using namespace geode::prelude;
 
 namespace {
-    constexpr int kFirstItemID = 1225;
-	constexpr int kSecondItemID = 1200;
-    constexpr int kItemCount = 16;
-    std::array<int, kItemCount> g_itemClipboard{};
-    bool g_hasCopied = false;
+    constexpr int FirstItemID = 1225;
+    constexpr int SecondItemID = 1200;
+    constexpr int ItemCount = 16;
 }
 
 $execute {
@@ -20,40 +20,70 @@ $execute {
 
             auto pl = PlayLayer::get();
 
-            // Q: set item 1 to 16 (your existing test key)
-            if (event.key == cocos2d::enumKeyCodes::KEY_Q) {
-                if (!pl || !pl->m_effectManager) {
-                    Notification::create("No active PlayLayer / effect manager", NotificationIcon::Error, 1.5f)->show();
-                    return ListenerResult::Propagate;
-                }
-                pl->m_effectManager->updateCountForItem(1, 16);
-                pl->updateCounters(1, 16);
-                Notification::create("Item 1 set to 16", NotificationIcon::Success, 1.0f)->show();
-                return ListenerResult::Propagate;
-            }
-
-            // Ctrl+C / Ctrl+V: copy-paste item IDs 1-16
             if (event.modifiers & KeyboardModifier::Control) {
                 if (event.key == cocos2d::enumKeyCodes::KEY_C) {
                     if (!pl || !pl->m_effectManager) return ListenerResult::Propagate;
-                    for (int i = 0; i < kItemCount; i++) {
-                        g_itemClipboard[i] = pl->m_effectManager->countForItem(kSecondItemID + i);
+
+                    std::ostringstream oss;
+                    for (int i = 0; i < ItemCount; i++) {
+                        int id = SecondItemID + i;
+                        int count = pl->m_effectManager->countForItem(id);
+                        if (i > 0) oss << ",";
+                        oss << id << ":" << count;
                     }
-                    g_hasCopied = true;
-                    Notification::create(fmt::format("Copied items {}-{}", kSecondItemID, kSecondItemID + kItemCount - 1), NotificationIcon::Success, 1.0f)->show();
+
+                    auto ok = clipboard::write(oss.str());
+                    if (ok) {
+                        Notification::create(fmt::format("Copied items {}-{}", SecondItemID, SecondItemID + ItemCount - 1), NotificationIcon::Success, 1.0f)->show();
+                    } else {
+                        Notification::create("Failed to write clipboard", NotificationIcon::Error, 1.0f)->show();
+                    }
                 }
                 else if (event.key == cocos2d::enumKeyCodes::KEY_V) {
                     if (!pl || !pl->m_effectManager) return ListenerResult::Propagate;
-                    if (!g_hasCopied) {
-                        Notification::create("Nothing copied yet", NotificationIcon::Error, 1.0f)->show();
+
+                    std::string clip = clipboard::read();
+                    if (clip.empty()) {
+                        Notification::create("Clipboard is empty", NotificationIcon::Error, 1.0f)->show();
                         return ListenerResult::Propagate;
                     }
-                    for (int i = 0; i < kItemCount; i++) {
-                        int id = kFirstItemID + i;
-                        pl->m_effectManager->updateCountForItem(id, g_itemClipboard[i]);
-                        pl->updateCounters(id, g_itemClipboard[i]);
+
+                    // Parse "id:value,id:value,..."
+                    std::array<int, ItemCount> parsed{};
+                    bool valid = true;
+                    int found = 0;
+
+                    std::stringstream ss(clip);
+                    std::string token;
+                    while (std::getline(ss, token, ',')) {
+                        auto colon = token.find(':');
+                        if (colon == std::string::npos) { valid = false; break; }
+
+                        try {
+                            int id = std::stoi(token.substr(0, colon));
+                            int value = std::stoi(token.substr(colon + 1));
+                            int idx = id - SecondItemID;
+                            if (idx < 0 || idx >= ItemCount) { valid = false; break; }
+                            parsed[idx] = value;
+                            found++;
+                        } catch (...) {
+                            valid = false;
+                            break;
+                        }
                     }
-                    Notification::create(fmt::format("Pasted items {}-{}", kFirstItemID, kFirstItemID + kItemCount - 1), NotificationIcon::Success, 1.0f)->show();
+
+                    if (!valid || found != ItemCount) {
+                        Notification::create("Clipboard text isn't valid item data", NotificationIcon::Error, 1.0f)->show();
+                        return ListenerResult::Propagate;
+                    }
+
+                    for (int i = 0; i < ItemCount; i++) {
+                        int id = FirstItemID + i;
+                        pl->m_effectManager->updateCountForItem(id, parsed[i]);
+                        pl->updateCounters(id, parsed[i]);
+                    }
+
+                    Notification::create(fmt::format("Pasted items {}-{}", FirstItemID, FirstItemID + ItemCount - 1), NotificationIcon::Success, 1.0f)->show();
                 }
             }
 
