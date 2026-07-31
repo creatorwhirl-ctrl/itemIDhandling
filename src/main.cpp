@@ -7,7 +7,7 @@ using namespace geode::prelude;
 
 namespace {
     constexpr int kFirstItemID = 1225;
-	cosntexpr int kSecondItemID = 1200;
+	constexpr int kSecondItemID = 1200;
     constexpr int kItemCount = 16;
     std::array<int, kItemCount> g_itemClipboard{};
     bool g_hasCopied = false;
