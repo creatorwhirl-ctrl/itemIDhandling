@@ -77,10 +77,29 @@ namespace {
 }
 
 class $modify(GroupOffsetTracker, PlayLayer) {
+    struct Fields {
+        int captureAttempts = 0;
+    };
+
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
-        captureBaselines(this);
+        m_fields->captureAttempts = 0;
+        this->schedule(schedule_selector(GroupOffsetTracker::tryCaptureBaselines));
         return true;
+    }
+
+    void tryCaptureBaselines(float) {
+        captureBaselines(this);
+        m_fields->captureAttempts++;
+
+        bool allCaptured = true;
+        for (bool captured : g_baseCaptured) {
+            if (!captured) { allCaptured = false; break; }
+        }
+
+        if (allCaptured || m_fields->captureAttempts >= 30) {
+            this->unschedule(schedule_selector(GroupOffsetTracker::tryCaptureBaselines));
+        }
     }
 };
 
@@ -137,26 +156,26 @@ $execute {
                     constexpr double blockUnit = 30.0;
 
                     for (int i = 0; i < ItemCount; i++) {
-					int id = FirstItemID + i;
-					pl->m_effectManager->updateCountForItem(id, parsed[i]);
-					pl->updateCounters(id, parsed[i]);
+                        int id = FirstItemID + i;
+                        pl->m_effectManager->updateCountForItem(id, parsed[i]);
+                        pl->updateCounters(id, parsed[i]);
 
-					if (!g_baseCaptured[i]) continue;
+                        if (!g_baseCaptured[i]) continue;
 
-					auto group = pl->getGroup(GroupIDs[i]);
-					if (!group || group->count() == 0) continue;
+                        auto group = pl->getGroup(GroupIDs[i]);
+                        if (!group || group->count() == 0) continue;
 
-					auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
-					double currentY = anchor->m_positionY;
+                        auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
+                        double currentY = anchor->m_positionY;
 
-					int blocksFromTop = 54 - parsed[i];
-					double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
+                        int blocksFromTop = 54 - parsed[i];
+                        double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
 
-					double delta = targetY - currentY;
-					if (delta != 0.0) {
-						pl->moveObjectsSilent(GroupIDs[i], 0.0, delta);
-					}
-}
+                        double delta = targetY - currentY;
+                        if (delta != 0.0) {
+                            pl->moveObjectsSilent(GroupIDs[i], 0.0, delta);
+                        }
+                    }
 
                     Notification::create(fmt::format("Pasted items {}-{}", FirstItemID, FirstItemID + ItemCount - 1), NotificationIcon::Success, 1.0f)->show();
                 }
