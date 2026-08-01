@@ -2,6 +2,7 @@
 #include <Geode/utils/Keyboard.hpp>
 #include <Geode/utils/general.hpp>
 #include <Geode/ui/Notification.hpp>
+#include <Geode/modify/PlayLayer.hpp>
 #include <array>
 #include <string>
 
@@ -17,13 +18,9 @@ namespace {
         5521, 5525, 5527, 5531, 5533, 5536, 5539, 5502
     };
 
-    // Y position of each group's "anchor" object as originally placed in the level.
-    // Captured once per level load, never touched afterward.
     std::array<double, ItemCount> g_baseGroupY{};
     std::array<bool, ItemCount> g_baseCaptured{};
 
-    // 1 block = 10 units normally, 30 units with "small step" on.
-    // Toggle at runtime with Ctrl+Alt+S.
     bool g_smallStep = false;
 
     constexpr const char* Alphabet =
@@ -79,8 +76,6 @@ namespace {
     }
 }
 
-// Captures the original Y position of each group as soon as the level loads,
-// so we always have a fixed reference point to move relative to.
 class $modify(GroupOffsetTracker, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
@@ -142,12 +137,10 @@ $execute {
                     double blockUnit = g_smallStep ? 30.0 : 10.0;
 
                     for (int i = 0; i < ItemCount; i++) {
-                        // Update the item counter
                         int id = FirstItemID + i;
                         pl->m_effectManager->updateCountForItem(id, parsed[i]);
                         pl->updateCounters(id, parsed[i]);
 
-                        // Move the matching group based on live current position
                         if (!g_baseCaptured[i]) continue;
 
                         auto group = pl->getGroup(GroupIDs[i]);
@@ -156,7 +149,7 @@ $execute {
                         auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
                         double currentY = anchor->m_positionY;
 
-                        int blocksFromTop = 64 - parsed[i]; // A(0) = 64 blocks down, /(63) = 1 block down
+                        int blocksFromTop = 64 - parsed[i];
                         double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
 
                         double delta = targetY - currentY;
