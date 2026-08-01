@@ -1,4 +1,3 @@
-// LevelStateSave.cpp
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/LevelInfoLayer.hpp>
@@ -35,15 +34,11 @@ namespace {
 
         float x = Mod::get()->getSavedValue<float>(key + "-x", 0.f);
         float y = Mod::get()->getSavedValue<float>(key + "-y", 0.f);
-
-        // Teleport Player 1
         pl->m_player1->setPosition({x, y});
         pl->m_player1->setRotation(Mod::get()->getSavedValue<float>(key + "-rot", 0.f));
         pl->m_player1->m_yVelocity = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
-        pl->m_player1->m_xVelocity = 0.0; // Reset horizontal momentum
         pl->m_attempts = Mod::get()->getSavedValue<int>(key + "-attempts", pl->m_attempts);
 
-        // Gamemode / Gravity States
         if (Mod::get()->getSavedValue<bool>(key + "-upsideDown", false)) pl->m_player1->flipGravity(true, true);
         if (Mod::get()->getSavedValue<bool>(key + "-ship", false)) pl->m_player1->toggleFlyMode(true, true);
         else if (Mod::get()->getSavedValue<bool>(key + "-ball", false)) pl->m_player1->toggleRollMode(true, true);
@@ -52,13 +47,9 @@ namespace {
         else if (Mod::get()->getSavedValue<bool>(key + "-robot", false)) pl->m_player1->toggleRobotMode(true, true);
         else if (Mod::get()->getSavedValue<bool>(key + "-spider", false)) pl->m_player1->toggleSpiderMode(true, true);
         if (Mod::get()->getSavedValue<bool>(key + "-swing", false)) pl->m_player1->toggleSwingMode(true, true);
-
-        // Instantly snap the camera to the player's new position
-        pl->updateCamera(0.0f);
     }
 }
 
-// 1. Intercept Play Button on LevelInfoLayer
 class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     struct Fields {
         bool m_confirmed = false;
@@ -76,8 +67,6 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
                     [this, sender](FLAlertLayer*, bool btn2) {
                         m_fields->m_confirmed = true;
                         g_shouldRestoreCheckpoint = btn2;
-                        
-                        // Proceed to launch level
                         this->onPlay(sender);
                     }
                 );
@@ -89,8 +78,11 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     }
 };
 
-// 2. Override Player Position inside PlayLayer::resetLevel
 class $modify(LevelStateSave, PlayLayer) {
+    struct Fields {
+        bool m_restored = false;
+    };
+
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
         if (cp) saveCheckpointState(this);
@@ -98,13 +90,12 @@ class $modify(LevelStateSave, PlayLayer) {
     }
 
     void resetLevel() {
-        // Let GD do its normal reset first
         PlayLayer::resetLevel();
 
-        // If user chose "Yes" on the popup, override player position
-        if (g_shouldRestoreCheckpoint) {
+        if (g_shouldRestoreCheckpoint && !m_fields->m_restored) {
+            m_fields->m_restored = true;
             applyCheckpointState(this);
-            g_shouldRestoreCheckpoint = false; // Reset flag after applying
+            g_shouldRestoreCheckpoint = false;
         }
     }
 };
