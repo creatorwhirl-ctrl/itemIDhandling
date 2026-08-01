@@ -12,6 +12,10 @@
 	"developer": "Whirlaroni",
 	"description": "Changes item ID",
 	"dependencies": {
-		"geode.node-ids": ">=v1.23.3"
+		"geode.node-ids": ">=v1.23.3",
+		"sabe.persistenceapi": {
+			"version": ">=v1.1.0",
+			"importance": "required"
+    	}
 	}
 }
