@@ -86,7 +86,7 @@ namespace {
 
         // Register into the native checkpoint system — GD's own engine
         // reapplies colors/effects/score from cp automatically from here.
-        pl->m_checkpointArray->addObject(cp);
+        //pl->m_checkpointArray->addObject(cp);
         pl->m_player1->setStartPos(cp->m_player1Checkpoint->m_position);
     }
 }
