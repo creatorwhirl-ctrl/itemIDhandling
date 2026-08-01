@@ -168,7 +168,7 @@ $execute {
                         auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
                         double currentY = anchor->m_positionY;
 
-                        int blocksFromTop = 64 - parsed[i];
+                        int blocksFromTop = 74 - parsed[i];
                         double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
 
                         double delta = targetY - currentY;
