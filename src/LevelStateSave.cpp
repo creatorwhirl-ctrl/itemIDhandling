@@ -17,7 +17,6 @@ namespace {
         
         auto key = getSaveKey(pl->m_level->m_levelID.value());
 
-        // Store physical positioning
         Mod::get()->setSavedValue<bool>(key + "-exists", true);
         Mod::get()->setSavedValue<float>(key + "-x", pl->m_player1->getPositionX());
         Mod::get()->setSavedValue<float>(key + "-y", pl->m_player1->getPositionY());
@@ -31,32 +30,32 @@ namespace {
         auto key = getSaveKey(pl->m_level->m_levelID.value());
         if (!Mod::get()->getSavedValue<bool>(key + "-exists", false)) return;
 
-        // Create genuine native CheckpointObject
-        auto cp = CheckpointObject::create();
+        // 1. Let GD generate a FULLY INITIALIZED native CheckpointObject
+        auto cp = pl->markCheckpoint();
         if (!cp) return;
 
-        // Register checkpoint in PlayLayer's native array
-        if (pl->m_checkpointArray) {
-            pl->m_checkpointArray->addObject(cp);
-        }
-
-        // Run native GD checkpoint restoration pass
-        pl->loadFromCheckpoint(cp);
-
-        // Position player cleanly
+        // 2. Read saved positioning
         float x = Mod::get()->getSavedValue<float>(key + "-x", 0.f);
         float y = Mod::get()->getSavedValue<float>(key + "-y", 0.f);
+        double yVel = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
 
+        // 3. Apply position directly to the created checkpoint
+        cp->m_playerPosition = {x, y};
+
+        // 4. Safely load from the valid checkpoint
+        pl->loadFromCheckpoint(cp);
+
+        // 5. Ensure player velocities & position are snapped correctly
         if (pl->m_player1) {
             pl->m_player1->setPosition({x, y});
-            pl->m_player1->m_yVelocity = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
+            pl->m_player1->m_yVelocity = yVel;
         }
 
         pl->updateCamera(0.0f);
     }
 }
 
-// 1. LevelInfoLayer Popup Intercept
+// LevelInfoLayer Confirmation Popup
 class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     struct Fields {
         bool m_confirmed = false;
@@ -85,11 +84,16 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     }
 };
 
-// 2. PlayLayer Hook
+// PlayLayer Hook
 class $modify(LevelStateSave, PlayLayer) {
+    struct Fields {
+        bool m_isRestoring = false;
+    };
+
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
-        if (cp && this->m_isPlatformer) {
+        // Avoid re-saving while we are restoring a checkpoint
+        if (cp && this->m_isPlatformer && !m_fields->m_isRestoring) {
             saveCheckpointData(this);
         }
         return cp;
@@ -100,7 +104,9 @@ class $modify(LevelStateSave, PlayLayer) {
 
         if (g_shouldRestoreCheckpoint) {
             g_shouldRestoreCheckpoint = false;
+            m_fields->m_isRestoring = true;
             loadCheckpointData(this);
+            m_fields->m_isRestoring = false;
         }
     }
 };
