@@ -12,15 +12,19 @@ namespace {
     constexpr int SecondItemID = 1200;
     constexpr int ItemCount = 16;
 
-    // Group ID that each of the 16 slots visually represents
     constexpr std::array<int, ItemCount> GroupIDs = {
         5483, 5499, 5503, 5506, 5509, 5511, 5515, 5518,
         5521, 5525, 5527, 5531, 5533, 5536, 5539, 5502
     };
 
-    // Remembers the offset we last applied per group so re-pasting
-    // moves groups to the new spot instead of stacking offsets.
-    std::array<double, ItemCount> g_lastAppliedOffset{};
+    // Y position of each group's "anchor" object as originally placed in the level.
+    // Captured once per level load, never touched afterward.
+    std::array<double, ItemCount> g_baseGroupY{};
+    std::array<bool, ItemCount> g_baseCaptured{};
+
+    // 1 block = 10 units normally, 30 units with "small step" on.
+    // Toggle at runtime with Ctrl+Alt+S.
+    bool g_smallStep = false;
 
     constexpr const char* Alphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -42,11 +46,6 @@ namespace {
         return -1;
     }
 
-    // value 0 (A) -> 640 units, value 63 (/) -> 10 units, step of 10
-    double offsetForValue(int value) {
-        return 640.0 - 10.0 * value;
-    }
-
     std::string formatWithDashes(const std::string& raw) {
         std::string out;
         out.reserve(raw.size() + raw.size() / 4);
@@ -65,7 +64,30 @@ namespace {
         }
         return out;
     }
+
+    void captureBaselines(PlayLayer* pl) {
+        for (int i = 0; i < ItemCount; i++) {
+            auto group = pl->getGroup(GroupIDs[i]);
+            if (group && group->count() > 0) {
+                auto obj = static_cast<GameObject*>(group->objectAtIndex(0));
+                g_baseGroupY[i] = obj->m_positionY;
+                g_baseCaptured[i] = true;
+            } else {
+                g_baseCaptured[i] = false;
+            }
+        }
+    }
 }
+
+// Captures the original Y position of each group as soon as the level loads,
+// so we always have a fixed reference point to move relative to.
+class $modify(GroupOffsetTracker, PlayLayer) {
+    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
+        captureBaselines(this);
+        return true;
+    }
+};
 
 $execute {
     KeyboardInputEvent()
@@ -75,6 +97,12 @@ $execute {
             auto pl = PlayLayer::get();
 
             if (event.modifiers & KeyboardModifier::Control) {
+                if (event.modifiers & KeyboardModifier::Alt && event.key == cocos2d::enumKeyCodes::KEY_S) {
+                    g_smallStep = !g_smallStep;
+                    Notification::create(fmt::format("Small step: {}", g_smallStep ? "ON" : "OFF"), NotificationIcon::Success, 1.0f)->show();
+                    return ListenerResult::Propagate;
+                }
+
                 if (event.key == cocos2d::enumKeyCodes::KEY_C) {
                     if (!pl || !pl->m_effectManager) return ListenerResult::Propagate;
 
@@ -111,18 +139,29 @@ $execute {
                         parsed[i] = value;
                     }
 
+                    double blockUnit = g_smallStep ? 30.0 : 10.0;
+
                     for (int i = 0; i < ItemCount; i++) {
                         // Update the item counter
                         int id = FirstItemID + i;
                         pl->m_effectManager->updateCountForItem(id, parsed[i]);
                         pl->updateCounters(id, parsed[i]);
 
-                        // Move the matching group to reflect the new value
-                        double target = offsetForValue(parsed[i]);
-                        double delta = target - g_lastAppliedOffset[i];
+                        // Move the matching group based on live current position
+                        if (!g_baseCaptured[i]) continue;
+
+                        auto group = pl->getGroup(GroupIDs[i]);
+                        if (!group || group->count() == 0) continue;
+
+                        auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
+                        double currentY = anchor->m_positionY;
+
+                        int blocksFromTop = 64 - parsed[i]; // A(0) = 64 blocks down, /(63) = 1 block down
+                        double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
+
+                        double delta = targetY - currentY;
                         if (delta != 0.0) {
                             pl->moveObjectsSilent(GroupIDs[i], 0.0, delta);
-                            g_lastAppliedOffset[i] = target;
                         }
                     }
 
