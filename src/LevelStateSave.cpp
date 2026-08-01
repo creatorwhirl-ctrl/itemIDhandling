@@ -50,9 +50,7 @@ namespace {
 
 class $modify(LevelStateSave, PlayLayer) {
     struct Fields {
-        bool m_decided = false;
-        bool m_wantsResume = false;
-        bool m_waitingForPopup = false;
+        bool m_askedPopup = false;
     };
 
     CheckpointObject* markCheckpoint() {
@@ -62,38 +60,29 @@ class $modify(LevelStateSave, PlayLayer) {
     }
 
     void setupHasCompleted() {
-        if (!m_fields->m_decided && m_isPlatformer && m_level) {
+        // ALWAYS let PlayLayer finish initialization normally first!
+        PlayLayer::setupHasCompleted();
+
+        if (!m_fields->m_askedPopup && m_isPlatformer && m_level) {
+            m_fields->m_askedPopup = true;
             auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
 
             if (Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) {
-                if (!m_fields->m_waitingForPopup) {
-                    m_fields->m_waitingForPopup = true;
-                    m_loadingProgress = 0.99f;
+                // Pause gameplay while the prompt is open
+                this->pauseSchedulerAndActions();
 
-                    createQuickPopup(
-                        "Continue?",
-                        "Continue at your <cy>last checkpoint</c> in this level?",
-                        "No", "Yes",
-                        [this](FLAlertLayer*, bool btn2) {
-                            m_fields->m_decided = true;
-                            m_fields->m_wantsResume = btn2;
-                            // Nothing else here. m_loadingProgress is only ever
-                            // touched below, inside setupHasCompleted itself,
-                            // which is driven by the scheduler, not touch input.
+                createQuickPopup(
+                    "Continue?",
+                    "Continue at your <cy>last checkpoint</c> in this level?",
+                    "No", "Yes",
+                    [this](FLAlertLayer*, bool btn2) {
+                        this->resumeSchedulerAndActions();
+                        if (btn2) {
+                            applyCheckpointState(this);
                         }
-                    );
-                }
-                return;
+                    }
+                );
             }
-            m_fields->m_decided = true;
-        }
-
-        m_loadingProgress = 1.0f;
-        PlayLayer::setupHasCompleted();
-
-        if (m_fields->m_wantsResume) {
-            applyCheckpointState(this);
-            m_fields->m_wantsResume = false;
         }
     }
 };
