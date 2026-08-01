@@ -27,6 +27,7 @@ namespace {
     }
 
     void applyCheckpointState(PlayLayer* pl) {
+        if (!pl->m_player1 || !pl->m_level) return;
         auto key = fmt::format("checkpoint-{}", pl->m_level->m_levelID.value());
 
         float x = Mod::get()->getSavedValue<float>(key + "-x", 0.f);
@@ -76,14 +77,11 @@ class $modify(LevelStateSave, PlayLayer) {
                         [this](FLAlertLayer*, bool btn2) {
                             m_fields->m_decided = true;
                             m_fields->m_wantsResume = btn2;
-                            // Don't call setupHasCompleted() ourselves - just let
-                            // the engine's own loading loop re-poll this on the
-                            // next frame now that m_decided is true.
                             m_loadingProgress = 1.0f;
                         }
                     );
                 }
-                return; // still waiting on the popup, don't fall through yet
+                return;
             }
             m_fields->m_decided = true;
         }
