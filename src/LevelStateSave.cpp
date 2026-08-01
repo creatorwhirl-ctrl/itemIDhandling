@@ -82,6 +82,7 @@ class $modify(LevelStateSave, PlayLayer) {
     struct Fields {
         bool m_restored = false;
         bool m_isSyntheticMark = false;
+        int m_reapplyAttempts = 0;
     };
 
     CheckpointObject* markCheckpoint() {
@@ -95,13 +96,21 @@ class $modify(LevelStateSave, PlayLayer) {
 
         if (g_shouldRestoreCheckpoint && !m_fields->m_restored) {
             m_fields->m_restored = true;
+            m_fields->m_reapplyAttempts = 0;
+            this->schedule(schedule_selector(LevelStateSave::reapplyCheckpoint));
+        }
+    }
 
-            applyCheckpointState(this);
-            m_fields->m_isSyntheticMark = true;
-            this->markCheckpoint();
-            m_fields->m_isSyntheticMark = false;
-            this->loadLastCheckpoint();
+    void reapplyCheckpoint(float) {
+        applyCheckpointState(this);
+        m_fields->m_isSyntheticMark = true;
+        this->markCheckpoint();
+        m_fields->m_isSyntheticMark = false;
+        this->loadLastCheckpoint();
 
+        m_fields->m_reapplyAttempts++;
+        if (m_fields->m_reapplyAttempts >= 20) { // ~1/3 second at 60fps
+            this->unschedule(schedule_selector(LevelStateSave::reapplyCheckpoint));
             g_shouldRestoreCheckpoint = false;
         }
     }
