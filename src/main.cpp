@@ -134,7 +134,7 @@ $execute {
                         parsed[i] = value;
                     }
 
-                    constexpr double blockUnit = 10.0;
+                    constexpr double blockUnit = 30.0;
 
                     for (int i = 0; i < ItemCount; i++) {
 					int id = FirstItemID + i;
