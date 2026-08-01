@@ -1,4 +1,4 @@
-
+// LevelStateSave.cpp
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/ui/Popup.hpp>
@@ -48,6 +48,11 @@ namespace {
 }
 
 class $modify(LevelStateSave, PlayLayer) {
+    struct Fields {
+        bool m_decided = false;
+        bool m_wantsResume = false;
+    };
+
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
         if (cp) saveCheckpointState(this);
@@ -55,22 +60,34 @@ class $modify(LevelStateSave, PlayLayer) {
     }
 
     void setupHasCompleted() {
+        if (!m_fields->m_decided && m_isPlatformer && m_level) {
+            auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
+
+            if (Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) {
+                // Hold the level on its loading screen — don't let the real
+                // setup-completion run until the player has answered.
+                m_loadingProgress = 0.99f;
+
+                createQuickPopup(
+                    "Continue?",
+                    "Continue at your <cy>last checkpoint</c> in this level?",
+                    "No", "Yes",
+                    [this](FLAlertLayer*, bool btn2) {
+                        m_fields->m_decided = true;
+                        m_fields->m_wantsResume = btn2;
+                        this->setupHasCompleted(); // re-enter, now that we have an answer
+                    }
+                );
+                return;
+            }
+            m_fields->m_decided = true;
+        }
+
         PlayLayer::setupHasCompleted();
 
-        if (!m_isPlatformer || !m_level) return;
-        auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
-        if (!Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) return;
-
-        if (canPauseGame()) pauseGame(false);
-
-        createQuickPopup(
-            "Continue?",
-            "Continue at your <cy>last checkpoint</c> in this level?",
-            "No", "Yes",
-            [this](FLAlertLayer*, bool btn2) {
-                if (btn2) applyCheckpointState(this);
-                resume();
-            }
-        );
+        if (m_fields->m_wantsResume) {
+            applyCheckpointState(this);
+            m_fields->m_wantsResume = false;
+        }
     }
 };
