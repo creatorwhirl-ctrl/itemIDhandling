@@ -1,11 +1,14 @@
-// LevelStateSave.cpp
+
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/LevelInfoLayer.hpp>
 #include <Geode/ui/Popup.hpp>
 
 using namespace geode::prelude;
 
 namespace {
+    bool g_shouldRestoreCheckpoint = false;
+
     void saveCheckpointState(PlayLayer* pl) {
         if (!pl->m_isPlatformer || !pl->m_level || !pl->m_player1) return;
         auto key = fmt::format("checkpoint-{}", pl->m_level->m_levelID.value());
@@ -48,11 +51,39 @@ namespace {
     }
 }
 
-class $modify(LevelStateSave, PlayLayer) {
+class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     struct Fields {
-        bool m_askedPopup = false;
+        bool m_confirmed = false;
     };
 
+    void onPlay(cocos2d::CCObject* sender) {
+        if (!m_fields->m_confirmed && m_level && m_level->isPlatformer()) {
+            auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
+
+            if (Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) {
+                createQuickPopup(
+                    "Continue?",
+                    "Continue at your <cy>last checkpoint</c> in this level?",
+                    "No", "Yes",
+                    [this, sender](FLAlertLayer*, bool btn2) {
+                        m_fields->m_confirmed = true;
+                        g_shouldRestoreCheckpoint = btn2;
+                        
+
+                        this->onPlay(sender);
+                    }
+                );
+                return; 
+            }
+        }
+
+        // Default launch behavior
+        LevelInfoLayer::onPlay(sender);
+    }
+};
+
+// 2. Handle restoring checkpoint inside PlayLayer
+class $modify(LevelStateSave, PlayLayer) {
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
         if (cp) saveCheckpointState(this);
@@ -60,29 +91,11 @@ class $modify(LevelStateSave, PlayLayer) {
     }
 
     void setupHasCompleted() {
-        // ALWAYS let PlayLayer finish initialization normally first!
         PlayLayer::setupHasCompleted();
 
-        if (!m_fields->m_askedPopup && m_isPlatformer && m_level) {
-            m_fields->m_askedPopup = true;
-            auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
-
-            if (Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) {
-                // Pause gameplay while the prompt is open
-                this->pauseSchedulerAndActions();
-
-                createQuickPopup(
-                    "Continue?",
-                    "Continue at your <cy>last checkpoint</c> in this level?",
-                    "No", "Yes",
-                    [this](FLAlertLayer*, bool btn2) {
-                        this->resumeSchedulerAndActions();
-                        if (btn2) {
-                            applyCheckpointState(this);
-                        }
-                    }
-                );
-            }
+        if (g_shouldRestoreCheckpoint) {
+            applyCheckpointState(this);
+            g_shouldRestoreCheckpoint = false; // Reset flag
         }
     }
 };
