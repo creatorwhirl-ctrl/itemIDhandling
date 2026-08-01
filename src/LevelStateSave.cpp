@@ -61,12 +61,15 @@ class $modify(LevelStateSave, PlayLayer) {
         auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
         if (!Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) return;
 
+        if (canPauseGame()) pauseGame(false);
+
         createQuickPopup(
             "Continue?",
             "Continue at your <cy>last checkpoint</c> in this level?",
             "No", "Yes",
             [this](FLAlertLayer*, bool btn2) {
                 if (btn2) applyCheckpointState(this);
+                resume();
             }
         );
     }
