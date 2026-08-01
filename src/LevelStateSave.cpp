@@ -15,7 +15,17 @@ namespace {
         return fmt::format("checkpoint-data-{}", levelID);
     }
 
-    // SAVE: pull straight off the real, live checkpoint the game just made in markCheckpoint().
+    // Helper: read the CURRENT resolved color for a channel ID.
+    // Verify this against your build with a log::info before trusting it blindly.
+    cocos2d::ccColor3B getCurrentChannelColor(PlayLayer* pl, int channelID, cocos2d::ccColor3B fallback) {
+        if (!pl->m_colorKeyDict) return fallback;
+        auto keyObj = static_cast<CCInteger*>(pl->m_colorKeyDict->objectForKey(std::to_string(channelID)));
+        if (!keyObj) return fallback;
+        int key = keyObj->getValue();
+        if (key < 0 || key >= static_cast<int>(pl->m_keyColors.size())) return fallback;
+        return pl->m_keyColors[key];
+    }
+
     void saveCheckpointData(PlayLayer* pl, CheckpointObject* cp) {
         if (!pl || !pl->m_level || !cp || !cp->m_player1Checkpoint) return;
         auto pc = cp->m_player1Checkpoint;
@@ -37,29 +47,40 @@ namespace {
         Mod::get()->setSavedValue<bool>(key + "-spider", pc->m_isSpider);
         Mod::get()->setSavedValue<bool>(key + "-swing", pc->m_isSwing);
         Mod::get()->setSavedValue<int>(key + "-attempts", pl->m_attempts);
+
+        // Colors: save the two standard channels. Add more IDs here if your
+        // level recolors other channels (line, P1, P2, 3DL, custom IDs, etc).
+        auto bg = getCurrentChannelColor(pl, 1000, {255,255,255});
+        auto ground = getCurrentChannelColor(pl, 1001, {255,255,255});
+        Mod::get()->setSavedValue<int>(key + "-bg-r", bg.r);
+        Mod::get()->setSavedValue<int>(key + "-bg-g", bg.g);
+        Mod::get()->setSavedValue<int>(key + "-bg-b", bg.b);
+        Mod::get()->setSavedValue<int>(key + "-gnd-r", ground.r);
+        Mod::get()->setSavedValue<int>(key + "-gnd-g", ground.g);
+        Mod::get()->setSavedValue<int>(key + "-gnd-b", ground.b);
     }
 
-    // LOAD: register a checkpoint into GD's OWN checkpoint array + set player start pos,
-    // instead of loadFromCheckpoint(). This is the actual PlatformerSaves trick.
     void loadCheckpointData(PlayLayer* pl) {
         if (!pl || !pl->m_level || !pl->m_player1) return;
 
         auto key = getSaveKey(pl->m_level->m_levelID.value());
         if (!Mod::get()->getSavedValue<bool>(key + "-exists", false)) return;
 
-        auto cp = CheckpointObject::create();
-        auto pc = PlayerCheckpoint::create();
-        if (!cp || !pc) return;
+        // Build the checkpoint from a REAL live snapshot, not from scratch,
+        // so every field is valid and only the ones we care about get overridden.
+        auto cp = pl->markCheckpoint();
+        if (!cp || !cp->m_player1Checkpoint) return;
+        auto pc = cp->m_player1Checkpoint;
 
         cocos2d::CCPoint pos = {
-            Mod::get()->getSavedValue<float>(key + "-x", 0.f),
-            Mod::get()->getSavedValue<float>(key + "-y", 0.f)
+            Mod::get()->getSavedValue<float>(key + "-x", pc->m_position.x),
+            Mod::get()->getSavedValue<float>(key + "-y", pc->m_position.y)
         };
 
         pc->m_position     = pos;
-        pc->m_yVelocity    = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
-        pc->m_rotation     = Mod::get()->getSavedValue<float>(key + "-rot", 0.f);
-        pc->m_gravityMod   = Mod::get()->getSavedValue<float>(key + "-gravity", 1.f);
+        pc->m_yVelocity    = Mod::get()->getSavedValue<double>(key + "-yvel", pc->m_yVelocity);
+        pc->m_rotation     = Mod::get()->getSavedValue<float>(key + "-rot", pc->m_rotation);
+        pc->m_gravityMod   = Mod::get()->getSavedValue<float>(key + "-gravity", pc->m_gravityMod);
         pc->m_isUpsideDown = Mod::get()->getSavedValue<bool>(key + "-upsidedown", false);
         pc->m_isMini       = Mod::get()->getSavedValue<bool>(key + "-mini", false);
         pc->m_isShip       = Mod::get()->getSavedValue<bool>(key + "-ship", false);
@@ -69,29 +90,30 @@ namespace {
         pc->m_isRobot      = Mod::get()->getSavedValue<bool>(key + "-robot", false);
         pc->m_isSpider     = Mod::get()->getSavedValue<bool>(key + "-spider", false);
         pc->m_isSwing      = Mod::get()->getSavedValue<bool>(key + "-swing", false);
-        pc->m_isOnGround   = true;
-
-        cp->m_player1Checkpoint = pc;
-
-        // Invisible stand-in marker, since the real checkpoint trigger that created this
-        // state no longer exists as a live level object in this session.
-        auto marker = GameObject::createWithFrame("square_01_001.png");
-        if (marker) {
-            marker->m_objectID = 0x2c; // checkpoint object ID
-            marker->setOpacity(0);
-            marker->setStartPos(pos);
-            cp->m_physicalCheckpointObject = marker;
-        }
 
         pl->m_attempts = Mod::get()->getSavedValue<int>(key + "-attempts", pl->m_attempts);
 
-        // Feed it into the game's own checkpoint system instead of forcing state directly.
+        // Register into the game's own checkpoint system + set start pos,
+        // instead of loadFromCheckpoint().
         pl->m_checkpointArray->addObject(cp);
         pl->m_player1->setStartPos(pos);
+
+        // Reapply the colors that were active when this checkpoint was saved.
+        cocos2d::ccColor3B bg = {
+            static_cast<GLubyte>(Mod::get()->getSavedValue<int>(key + "-bg-r", 255)),
+            static_cast<GLubyte>(Mod::get()->getSavedValue<int>(key + "-bg-g", 255)),
+            static_cast<GLubyte>(Mod::get()->getSavedValue<int>(key + "-bg-b", 255))
+        };
+        cocos2d::ccColor3B ground = {
+            static_cast<GLubyte>(Mod::get()->getSavedValue<int>(key + "-gnd-r", 255)),
+            static_cast<GLubyte>(Mod::get()->getSavedValue<int>(key + "-gnd-g", 255)),
+            static_cast<GLubyte>(Mod::get()->getSavedValue<int>(key + "-gnd-b", 255))
+        };
+        pl->colorObject(1000, bg);
+        pl->colorObject(1001, ground);
     }
 }
 
-// LevelInfoLayer Popup Intercept
 class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     struct Fields {
         bool m_confirmed = false;
@@ -120,7 +142,6 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     }
 };
 
-// PlayLayer Hook
 class $modify(LevelStateSave, PlayLayer) {
     struct Fields {
         bool m_isRestoring = false;
@@ -135,8 +156,6 @@ class $modify(LevelStateSave, PlayLayer) {
     }
 
     void resetLevel() {
-        // Prepare the checkpoint + start pos BEFORE the native reset runs,
-        // so it's already in place when GD does its own spawn placement.
         if (g_shouldRestoreCheckpoint && !m_fields->m_isRestoring) {
             g_shouldRestoreCheckpoint = false;
             m_fields->m_isRestoring = true;
