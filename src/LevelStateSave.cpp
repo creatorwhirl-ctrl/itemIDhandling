@@ -81,11 +81,12 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
 class $modify(LevelStateSave, PlayLayer) {
     struct Fields {
         bool m_restored = false;
+        bool m_isSyntheticMark = false;
     };
 
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
-        if (cp) saveCheckpointState(this);
+        if (cp && !m_fields->m_isSyntheticMark) saveCheckpointState(this);
         return cp;
     }
 
@@ -94,7 +95,13 @@ class $modify(LevelStateSave, PlayLayer) {
 
         if (g_shouldRestoreCheckpoint && !m_fields->m_restored) {
             m_fields->m_restored = true;
+
             applyCheckpointState(this);
+            m_fields->m_isSyntheticMark = true;
+            this->markCheckpoint();
+            m_fields->m_isSyntheticMark = false;
+            this->loadLastCheckpoint();
+
             g_shouldRestoreCheckpoint = false;
         }
     }
