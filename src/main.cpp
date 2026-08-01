@@ -79,13 +79,17 @@ namespace {
 class $modify(GroupOffsetTracker, PlayLayer) {
     struct Fields {
         int captureAttempts = 0;
+        bool started = false;
     };
 
-    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-        if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
-        m_fields->captureAttempts = 0;
-        this->schedule(schedule_selector(GroupOffsetTracker::tryCaptureBaselines));
-        return true;
+    void setupHasCompleted() {
+        PlayLayer::setupHasCompleted();
+
+        if (!m_fields->started) {
+            m_fields->started = true;
+            m_fields->captureAttempts = 0;
+            this->schedule(schedule_selector(GroupOffsetTracker::tryCaptureBaselines));
+        }
     }
 
     void tryCaptureBaselines(float) {
