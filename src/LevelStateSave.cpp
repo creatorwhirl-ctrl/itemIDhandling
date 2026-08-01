@@ -77,7 +77,9 @@ class $modify(LevelStateSave, PlayLayer) {
                         [this](FLAlertLayer*, bool btn2) {
                             m_fields->m_decided = true;
                             m_fields->m_wantsResume = btn2;
-                            m_loadingProgress = 1.0f;
+                            // Nothing else here. m_loadingProgress is only ever
+                            // touched below, inside setupHasCompleted itself,
+                            // which is driven by the scheduler, not touch input.
                         }
                     );
                 }
@@ -86,6 +88,7 @@ class $modify(LevelStateSave, PlayLayer) {
             m_fields->m_decided = true;
         }
 
+        m_loadingProgress = 1.0f;
         PlayLayer::setupHasCompleted();
 
         if (m_fields->m_wantsResume) {
