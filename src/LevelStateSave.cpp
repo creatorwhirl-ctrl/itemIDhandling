@@ -76,34 +76,23 @@ namespace {
     }
 
     void loadCheckpointData(PlayLayer* pl) {
-        geode::log::info("loadCheckpointData: start");
         if (!pl || !pl->m_level || !pl->m_player1) return;
 
         auto path = getSaveFilePath(pl->m_level->m_levelID.value());
-        geode::log::info("loadCheckpointData: path = {}", path.string());
         if (!std::filesystem::exists(path)) return;
 
         Stream stream;
-        geode::log::info("loadCheckpointData: opening stream");
-        if (!stream.setFile(path.string(), false)) {
-            geode::log::info("loadCheckpointData: setFile failed");
-            return;
-        }
-        geode::log::info("loadCheckpointData: setFile succeeded, file size = {}", std::filesystem::file_size(path));
+        if (!stream.setFile(path.string(), false)) return;
+        stream.seek(0);   // <-- add this, mirrors the save path
 
         auto cp = CheckpointObject::create();
         if (!cp) return;
-        geode::log::info("loadCheckpointData: CheckpointObject created, reading...");
 
         readCheckpoint(cp, stream);
-        geode::log::info("loadCheckpointData: readCheckpoint returned");
         stream.end();
 
-        geode::log::info("loadCheckpointData: adding to checkpoint array");
         pl->m_checkpointArray->addObject(cp);
-        geode::log::info("loadCheckpointData: setting player start pos");
         pl->m_player1->setStartPos(cp->m_player1Checkpoint->m_position);
-        geode::log::info("loadCheckpointData: done");
     }
 }
 
