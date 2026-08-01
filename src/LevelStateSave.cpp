@@ -30,22 +30,19 @@ namespace {
         auto key = getSaveKey(pl->m_level->m_levelID.value());
         if (!Mod::get()->getSavedValue<bool>(key + "-exists", false)) return;
 
-        // 1. Let GD generate a FULLY INITIALIZED native CheckpointObject
+        // 1. Create a native CheckpointObject using GD's engine function
         auto cp = pl->markCheckpoint();
         if (!cp) return;
 
-        // 2. Read saved positioning
+        // 2. Read saved positioning details
         float x = Mod::get()->getSavedValue<float>(key + "-x", 0.f);
         float y = Mod::get()->getSavedValue<float>(key + "-y", 0.f);
         double yVel = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
 
-        // 3. Apply position directly to the created checkpoint
-        cp->m_playerPosition = {x, y};
-
-        // 4. Safely load from the valid checkpoint
+        // 3. Trigger GD's internal checkpoint loading logic
         pl->loadFromCheckpoint(cp);
 
-        // 5. Ensure player velocities & position are snapped correctly
+        // 4. Reposition player cleanly
         if (pl->m_player1) {
             pl->m_player1->setPosition({x, y});
             pl->m_player1->m_yVelocity = yVel;
@@ -55,7 +52,7 @@ namespace {
     }
 }
 
-// LevelInfoLayer Confirmation Popup
+// LevelInfoLayer Popup Intercept
 class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     struct Fields {
         bool m_confirmed = false;
@@ -92,7 +89,7 @@ class $modify(LevelStateSave, PlayLayer) {
 
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
-        // Avoid re-saving while we are restoring a checkpoint
+        // Avoid recursive saving while restoring checkpoint
         if (cp && this->m_isPlatformer && !m_fields->m_isRestoring) {
             saveCheckpointData(this);
         }
