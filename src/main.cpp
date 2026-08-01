@@ -134,29 +134,29 @@ $execute {
                         parsed[i] = value;
                     }
 
-                    double blockUnit = g_smallStep ? 30.0 : 10.0;
+                    constexpr double blockUnit = 10.0;
 
                     for (int i = 0; i < ItemCount; i++) {
-                        int id = FirstItemID + i;
-                        pl->m_effectManager->updateCountForItem(id, parsed[i]);
-                        pl->updateCounters(id, parsed[i]);
+					int id = FirstItemID + i;
+					pl->m_effectManager->updateCountForItem(id, parsed[i]);
+					pl->updateCounters(id, parsed[i]);
 
-                        if (!g_baseCaptured[i]) continue;
+					if (!g_baseCaptured[i]) continue;
 
-                        auto group = pl->getGroup(GroupIDs[i]);
-                        if (!group || group->count() == 0) continue;
+					auto group = pl->getGroup(GroupIDs[i]);
+					if (!group || group->count() == 0) continue;
 
-                        auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
-                        double currentY = anchor->m_positionY;
+					auto anchor = static_cast<GameObject*>(group->objectAtIndex(0));
+					double currentY = anchor->m_positionY;
 
-                        int blocksFromTop = 64 - parsed[i];
-                        double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
+					int blocksFromTop = 64 - parsed[i];
+					double targetY = g_baseGroupY[i] - (blocksFromTop * blockUnit);
 
-                        double delta = targetY - currentY;
-                        if (delta != 0.0) {
-                            pl->moveObjectsSilent(GroupIDs[i], 0.0, delta);
-                        }
-                    }
+					double delta = targetY - currentY;
+					if (delta != 0.0) {
+						pl->moveObjectsSilent(GroupIDs[i], 0.0, delta);
+					}
+}
 
                     Notification::create(fmt::format("Pasted items {}-{}", FirstItemID, FirstItemID + ItemCount - 1), NotificationIcon::Success, 1.0f)->show();
                 }
