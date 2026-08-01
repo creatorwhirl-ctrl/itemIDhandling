@@ -12,42 +12,68 @@ namespace {
         return fmt::format("checkpoint-data-{}", levelID);
     }
 
-    void saveCheckpointData(PlayLayer* pl) {
-        if (!pl || !pl->m_level || !pl->m_player1) return;
-        
+    // Pull everything relevant off the real PlayerCheckpoint the game just made.
+    void saveCheckpointData(PlayLayer* pl, CheckpointObject* cp) {
+        if (!pl || !pl->m_level || !cp || !cp->m_player1Checkpoint) return;
+
+        auto pc = cp->m_player1Checkpoint;
         auto key = getSaveKey(pl->m_level->m_levelID.value());
 
         Mod::get()->setSavedValue<bool>(key + "-exists", true);
-        Mod::get()->setSavedValue<float>(key + "-x", pl->m_player1->getPositionX());
-        Mod::get()->setSavedValue<float>(key + "-y", pl->m_player1->getPositionY());
-        Mod::get()->setSavedValue<double>(key + "-yvel", pl->m_player1->m_yVelocity);
+
+        Mod::get()->setSavedValue<float>(key + "-x", pc->m_position.x);
+        Mod::get()->setSavedValue<float>(key + "-y", pc->m_position.y);
+        Mod::get()->setSavedValue<double>(key + "-yvel", pc->m_yVelocity);
+        Mod::get()->setSavedValue<float>(key + "-rot", pc->m_rotation);
+        Mod::get()->setSavedValue<float>(key + "-gravity", pc->m_gravityMod);
+
+        Mod::get()->setSavedValue<bool>(key + "-upsidedown", pc->m_isUpsideDown);
+        Mod::get()->setSavedValue<bool>(key + "-mini", pc->m_isMini);
+        Mod::get()->setSavedValue<bool>(key + "-ship", pc->m_isShip);
+        Mod::get()->setSavedValue<bool>(key + "-ball", pc->m_isBall);
+        Mod::get()->setSavedValue<bool>(key + "-bird", pc->m_isBird);
+        Mod::get()->setSavedValue<bool>(key + "-dart", pc->m_isDart);
+        Mod::get()->setSavedValue<bool>(key + "-robot", pc->m_isRobot);
+        Mod::get()->setSavedValue<bool>(key + "-spider", pc->m_isSpider);
+        Mod::get()->setSavedValue<bool>(key + "-swing", pc->m_isSwing);
+        Mod::get()->setSavedValue<bool>(key + "-onground", pc->m_isOnGround);
+
         Mod::get()->setSavedValue<int>(key + "-attempts", pl->m_attempts);
     }
 
+    // Build a *real* checkpoint (valid pointers, valid PlayerCheckpoint), then
+    // overwrite it with saved values instead of trying to construct one from nothing.
     void loadCheckpointData(PlayLayer* pl) {
         if (!pl || !pl->m_level) return;
-        
+
         auto key = getSaveKey(pl->m_level->m_levelID.value());
         if (!Mod::get()->getSavedValue<bool>(key + "-exists", false)) return;
 
-        // 1. Create a native CheckpointObject using GD's engine function
         auto cp = pl->markCheckpoint();
-        if (!cp) return;
+        if (!cp || !cp->m_player1Checkpoint) return;
 
-        // 2. Read saved positioning details
-        float x = Mod::get()->getSavedValue<float>(key + "-x", 0.f);
-        float y = Mod::get()->getSavedValue<float>(key + "-y", 0.f);
-        double yVel = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
+        auto pc = cp->m_player1Checkpoint;
 
-        // 3. Trigger GD's internal checkpoint loading logic
+        pc->m_position.x = Mod::get()->getSavedValue<float>(key + "-x", pc->m_position.x);
+        pc->m_position.y = Mod::get()->getSavedValue<float>(key + "-y", pc->m_position.y);
+        pc->m_yVelocity  = Mod::get()->getSavedValue<double>(key + "-yvel", pc->m_yVelocity);
+        pc->m_rotation   = Mod::get()->getSavedValue<float>(key + "-rot", pc->m_rotation);
+        pc->m_gravityMod = Mod::get()->getSavedValue<float>(key + "-gravity", pc->m_gravityMod);
+
+        pc->m_isUpsideDown = Mod::get()->getSavedValue<bool>(key + "-upsidedown", false);
+        pc->m_isMini       = Mod::get()->getSavedValue<bool>(key + "-mini", false);
+        pc->m_isShip       = Mod::get()->getSavedValue<bool>(key + "-ship", false);
+        pc->m_isBall       = Mod::get()->getSavedValue<bool>(key + "-ball", false);
+        pc->m_isBird       = Mod::get()->getSavedValue<bool>(key + "-bird", false);
+        pc->m_isDart       = Mod::get()->getSavedValue<bool>(key + "-dart", false);
+        pc->m_isRobot      = Mod::get()->getSavedValue<bool>(key + "-robot", false);
+        pc->m_isSpider     = Mod::get()->getSavedValue<bool>(key + "-spider", false);
+        pc->m_isSwing      = Mod::get()->getSavedValue<bool>(key + "-swing", false);
+        pc->m_isOnGround   = Mod::get()->getSavedValue<bool>(key + "-onground", true);
+
+        pl->m_attempts = Mod::get()->getSavedValue<int>(key + "-attempts", pl->m_attempts);
+
         pl->loadFromCheckpoint(cp);
-
-        // 4. Reposition player cleanly
-        if (pl->m_player1) {
-            pl->m_player1->setPosition({x, y});
-            pl->m_player1->m_yVelocity = yVel;
-        }
-
         pl->updateCamera(0.0f);
     }
 }
@@ -89,9 +115,8 @@ class $modify(LevelStateSave, PlayLayer) {
 
     CheckpointObject* markCheckpoint() {
         auto cp = PlayLayer::markCheckpoint();
-        // Avoid recursive saving while restoring checkpoint
         if (cp && this->m_isPlatformer && !m_fields->m_isRestoring) {
-            saveCheckpointData(this);
+            saveCheckpointData(this, cp);
         }
         return cp;
     }
