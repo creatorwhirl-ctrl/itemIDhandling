@@ -51,6 +51,7 @@ class $modify(LevelStateSave, PlayLayer) {
     struct Fields {
         bool m_decided = false;
         bool m_wantsResume = false;
+        bool m_waitingForPopup = false;
     };
 
     CheckpointObject* markCheckpoint() {
@@ -64,21 +65,25 @@ class $modify(LevelStateSave, PlayLayer) {
             auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
 
             if (Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) {
-                // Hold the level on its loading screen — don't let the real
-                // setup-completion run until the player has answered.
-                m_loadingProgress = 0.99f;
+                if (!m_fields->m_waitingForPopup) {
+                    m_fields->m_waitingForPopup = true;
+                    m_loadingProgress = 0.99f;
 
-                createQuickPopup(
-                    "Continue?",
-                    "Continue at your <cy>last checkpoint</c> in this level?",
-                    "No", "Yes",
-                    [this](FLAlertLayer*, bool btn2) {
-                        m_fields->m_decided = true;
-                        m_fields->m_wantsResume = btn2;
-                        this->setupHasCompleted(); // re-enter, now that we have an answer
-                    }
-                );
-                return;
+                    createQuickPopup(
+                        "Continue?",
+                        "Continue at your <cy>last checkpoint</c> in this level?",
+                        "No", "Yes",
+                        [this](FLAlertLayer*, bool btn2) {
+                            m_fields->m_decided = true;
+                            m_fields->m_wantsResume = btn2;
+                            // Don't call setupHasCompleted() ourselves - just let
+                            // the engine's own loading loop re-poll this on the
+                            // next frame now that m_decided is true.
+                            m_loadingProgress = 1.0f;
+                        }
+                    );
+                }
+                return; // still waiting on the popup, don't fall through yet
             }
             m_fields->m_decided = true;
         }
