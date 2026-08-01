@@ -30,23 +30,29 @@ namespace {
     }
 
     void readCheckpoint(CheckpointObject* cp, Stream& stream) {
-    cp->m_player1Checkpoint = PlayerCheckpoint::create();
-    CC_SAFE_RETAIN(cp->m_player1Checkpoint);
-    reinterpret_cast<PAPlayerCheckpoint*>(cp->m_player1Checkpoint)->load(stream);
-    reinterpret_cast<PAEffectManagerState*>(&cp->m_effectManagerState)->load(stream);
-    reinterpret_cast<PAGJGameState*>(&cp->m_gameState)->load(stream);
+        cp->m_player1Checkpoint = PlayerCheckpoint::create();
+        CC_SAFE_RETAIN(cp->m_player1Checkpoint);
+        geode::log::info("readCheckpoint: loading player checkpoint");
+        reinterpret_cast<PAPlayerCheckpoint*>(cp->m_player1Checkpoint)->load(stream);
 
-    cocos2d::CCPoint pos;
-    stream >> pos;
+        geode::log::info("readCheckpoint: loading effect manager state");
+        reinterpret_cast<PAEffectManagerState*>(&cp->m_effectManagerState)->load(stream);
 
-    // Invisible stand-in marker, since the real trigger that created
-    // this checkpoint doesn't exist as a live object in this session.
-    auto marker = GameObject::createWithFrame("square_01_001.png");
-    CC_SAFE_RETAIN(marker);
-    marker->m_objectID = 0x2c;
-    marker->setOpacity(0);
-    marker->setStartPos(pos);
-    cp->m_physicalCheckpointObject = marker;
+        geode::log::info("readCheckpoint: loading game state");
+        reinterpret_cast<PAGJGameState*>(&cp->m_gameState)->load(stream);
+
+        geode::log::info("readCheckpoint: reading position");
+        cocos2d::CCPoint pos;
+        stream >> pos;
+
+        geode::log::info("readCheckpoint: creating marker");
+        auto marker = GameObject::createWithFrame("square_01_001.png");
+        CC_SAFE_RETAIN(marker);
+        marker->m_objectID = 0x2c;
+        marker->setOpacity(0);
+        marker->setStartPos(pos);
+        cp->m_physicalCheckpointObject = marker;
+        geode::log::info("readCheckpoint: done");
     }
 
     std::string getSaveKey(int levelID) {
@@ -70,24 +76,34 @@ namespace {
     }
 
     void loadCheckpointData(PlayLayer* pl) {
+        geode::log::info("loadCheckpointData: start");
         if (!pl || !pl->m_level || !pl->m_player1) return;
 
         auto path = getSaveFilePath(pl->m_level->m_levelID.value());
+        geode::log::info("loadCheckpointData: path = {}", path.string());
         if (!std::filesystem::exists(path)) return;
 
         Stream stream;
-        if (!stream.setFile(path.string(), false)) return;
+        geode::log::info("loadCheckpointData: opening stream");
+        if (!stream.setFile(path.string(), false)) {
+            geode::log::info("loadCheckpointData: setFile failed");
+            return;
+        }
+        geode::log::info("loadCheckpointData: setFile succeeded, file size = {}", std::filesystem::file_size(path));
 
         auto cp = CheckpointObject::create();
         if (!cp) return;
+        geode::log::info("loadCheckpointData: CheckpointObject created, reading...");
 
         readCheckpoint(cp, stream);
+        geode::log::info("loadCheckpointData: readCheckpoint returned");
         stream.end();
 
-        // Register into the native checkpoint system — GD's own engine
-        // reapplies colors/effects/score from cp automatically from here.
+        geode::log::info("loadCheckpointData: adding to checkpoint array");
         pl->m_checkpointArray->addObject(cp);
+        geode::log::info("loadCheckpointData: setting player start pos");
         pl->m_player1->setStartPos(cp->m_player1Checkpoint->m_position);
+        geode::log::info("loadCheckpointData: done");
     }
 }
 
