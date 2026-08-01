@@ -8,66 +8,56 @@ using namespace geode::prelude;
 namespace {
     bool g_shouldRestoreCheckpoint = false;
 
-    void saveCheckpointState(PlayLayer* pl) {
-        if (!pl->m_isPlatformer || !pl->m_level || !pl->m_player1) return;
-        auto key = fmt::format("checkpoint-{}", pl->m_level->m_levelID.value());
-
-        // Save Player Transform & Gamemodes
-        Mod::get()->setSavedValue<bool>(key + "-hasSave", true);
-        Mod::get()->setSavedValue<float>(key + "-x", pl->m_player1->getPositionX());
-        Mod::get()->setSavedValue<float>(key + "-y", pl->m_player1->getPositionY());
-        Mod::get()->setSavedValue<float>(key + "-rot", pl->m_player1->getRotation());
-        Mod::get()->setSavedValue<double>(key + "-yvel", pl->m_player1->m_yVelocity);
-        
-        Mod::get()->setSavedValue<bool>(key + "-upsideDown", pl->m_player1->m_isUpsideDown);
-        Mod::get()->setSavedValue<bool>(key + "-ship", pl->m_player1->m_isShip);
-        Mod::get()->setSavedValue<bool>(key + "-ball", pl->m_player1->m_isBall);
-        Mod::get()->setSavedValue<bool>(key + "-bird", pl->m_player1->m_isBird);
-        Mod::get()->setSavedValue<bool>(key + "-dart", pl->m_player1->m_isDart);
-        Mod::get()->setSavedValue<bool>(key + "-robot", pl->m_player1->m_isRobot);
-        Mod::get()->setSavedValue<bool>(key + "-spider", pl->m_player1->m_isSpider);
-        Mod::get()->setSavedValue<bool>(key + "-swing", pl->m_player1->m_isSwing);
-        Mod::get()->setSavedValue<int>(key + "-attempts", pl->m_attempts);
+    // Save key helper
+    std::string getSaveKey(int levelID) {
+        return fmt::format("saved-checkpoint-{}", levelID);
     }
 
-    void restoreNativeState(PlayLayer* pl) {
-        if (!pl->m_player1 || !pl->m_level) return;
-        auto key = fmt::format("checkpoint-{}", pl->m_level->m_levelID.value());
+    void saveFullCheckpointState(PlayLayer* pl, CheckpointObject* cp) {
+        if (!pl || !pl->m_level || !cp) return;
 
+        // Serialize the player's spatial state
+        auto key = getSaveKey(pl->m_level->m_levelID.value());
+        
+        Mod::get()->setSavedValue<bool>(key + "-hasSave", true);
+        Mod::get()->setSavedValue<float>(key + "-x", cp->m_gameState.m_playerPosition.x);
+        Mod::get()->setSavedValue<float>(key + "-y", cp->m_gameState.m_playerPosition.y);
+        Mod::get()->setSavedValue<double>(key + "-yvel", cp->m_gameState.m_playerYVelocity);
+        Mod::get()->setSavedValue<int>(key + "-attempts", pl->m_attempts);
+
+        // NOTE: For full trigger/item state persistence across game restarts,
+        // GD's internal m_effectManager state can be serialized to JSON here.
+    }
+
+    void loadFullCheckpointState(PlayLayer* pl) {
+        if (!pl || !pl->m_level) return;
+        auto key = getSaveKey(pl->m_level->m_levelID.value());
+
+        if (!Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) return;
+
+        // 1. Instantiate a genuine GD CheckpointObject
+        auto cp = CheckpointObject::create();
+        if (!cp) return;
+
+        // 2. Populate the native GameState structure
         float x = Mod::get()->getSavedValue<float>(key + "-x", 0.f);
         float y = Mod::get()->getSavedValue<float>(key + "-y", 0.f);
+        
+        cp->m_gameState.m_playerPosition = {x, y};
+        cp->m_gameState.m_playerYVelocity = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
 
-        // Create native CheckpointObject
-        auto cp = CheckpointObject::create();
-        if (cp) {
-            if (pl->m_checkpointArray) {
-                pl->m_checkpointArray->addObject(cp);
-            }
-            pl->loadFromCheckpoint(cp);
+        // 3. Register the checkpoint with PlayLayer's native array
+        if (pl->m_checkpointArray) {
+            pl->m_checkpointArray->addObject(cp);
         }
 
-        // Apply saved physical state directly to player
-        pl->m_player1->setPosition({x, y});
-        pl->m_player1->setRotation(Mod::get()->getSavedValue<float>(key + "-rot", 0.f));
-        pl->m_player1->m_yVelocity = Mod::get()->getSavedValue<double>(key + "-yvel", 0.0);
-        pl->m_attempts = Mod::get()->getSavedValue<int>(key + "-attempts", pl->m_attempts);
-
-        // Restore gamemodes and gravity state
-        if (Mod::get()->getSavedValue<bool>(key + "-upsideDown", false)) pl->m_player1->flipGravity(true, true);
-        if (Mod::get()->getSavedValue<bool>(key + "-ship", false)) pl->m_player1->toggleFlyMode(true, true);
-        else if (Mod::get()->getSavedValue<bool>(key + "-ball", false)) pl->m_player1->toggleRollMode(true, true);
-        else if (Mod::get()->getSavedValue<bool>(key + "-bird", false)) pl->m_player1->toggleBirdMode(true, true);
-        else if (Mod::get()->getSavedValue<bool>(key + "-dart", false)) pl->m_player1->toggleDartMode(true, true);
-        else if (Mod::get()->getSavedValue<bool>(key + "-robot", false)) pl->m_player1->toggleRobotMode(true, true);
-        else if (Mod::get()->getSavedValue<bool>(key + "-spider", false)) pl->m_player1->toggleSpiderMode(true, true);
-        if (Mod::get()->getSavedValue<bool>(key + "-swing", false)) pl->m_player1->toggleSwingMode(true, true);
-
-        // Snap camera immediately to updated position
-        pl->updateCamera(0.0f);
+        // 4. Force PlayLayer to execute its native checkpoint restore logic
+        // This handles player positioning, object groups, and camera triggers
+        pl->loadFromCheckpoint(cp);
     }
 }
 
-// 1. Prompt before PlayLayer opens
+// 1. Intercept play attempt on LevelInfoLayer
 class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     struct Fields {
         bool m_confirmed = false;
@@ -75,7 +65,7 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
 
     void onPlay(cocos2d::CCObject* sender) {
         if (!m_fields->m_confirmed && m_level && m_level->isPlatformer()) {
-            auto key = fmt::format("checkpoint-{}", m_level->m_levelID.value());
+            auto key = getSaveKey(m_level->m_levelID.value());
 
             if (Mod::get()->getSavedValue<bool>(key + "-hasSave", false)) {
                 createQuickPopup(
@@ -96,12 +86,13 @@ class $modify(MyLevelInfoLayer, LevelInfoLayer) {
     }
 };
 
-// 2. Restore state when resetLevel executes
+// 2. Hook PlayLayer to save & restore authentic native checkpoints
 class $modify(LevelStateSave, PlayLayer) {
     CheckpointObject* markCheckpoint() {
+        // Let GD create its native CheckpointObject containing GJGameState
         auto cp = PlayLayer::markCheckpoint();
-        if (cp) {
-            saveCheckpointState(this);
+        if (cp && this->m_isPlatformer) {
+            saveFullCheckpointState(this, cp);
         }
         return cp;
     }
@@ -109,9 +100,10 @@ class $modify(LevelStateSave, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
 
+        // Restore native checkpoint when starting level if confirmed
         if (g_shouldRestoreCheckpoint) {
             g_shouldRestoreCheckpoint = false;
-            restoreNativeState(this);
+            loadFullCheckpointState(this);
         }
     }
 };
