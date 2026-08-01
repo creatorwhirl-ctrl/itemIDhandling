@@ -30,22 +30,23 @@ namespace {
     }
 
     void readCheckpoint(CheckpointObject* cp, Stream& stream) {
-        cp->m_player1Checkpoint = PlayerCheckpoint::create();
-        CC_SAFE_RETAIN(cp->m_player1Checkpoint);
-        reinterpret_cast<PAPlayerCheckpoint*>(cp->m_player1Checkpoint)->load(stream);
-        reinterpret_cast<PAEffectManagerState*>(&cp->m_effectManagerState)->load(stream);
-        reinterpret_cast<PAGJGameState*>(&cp->m_gameState)->load(stream);
+    cp->m_player1Checkpoint = PlayerCheckpoint::create();
+    CC_SAFE_RETAIN(cp->m_player1Checkpoint);
+    reinterpret_cast<PAPlayerCheckpoint*>(cp->m_player1Checkpoint)->load(stream);
+    reinterpret_cast<PAEffectManagerState*>(&cp->m_effectManagerState)->load(stream);
+    reinterpret_cast<PAGJGameState*>(&cp->m_gameState)->load(stream);
 
-        cocos2d::CCPoint pos;
-        stream >> pos;
+    cocos2d::CCPoint pos;
+    stream >> pos;
 
-        // Invisible stand-in marker, since the real trigger that created
-        // this checkpoint doesn't exist as a live object in this session.
-        auto marker = GameObject::createWithFrame("square_01_001.png");
-        marker->m_objectID = 0x2c;
-        marker->setOpacity(0);
-        marker->setStartPos(pos);
-        cp->m_physicalCheckpointObject = marker;
+    // Invisible stand-in marker, since the real trigger that created
+    // this checkpoint doesn't exist as a live object in this session.
+    auto marker = GameObject::createWithFrame("square_01_001.png");
+    CC_SAFE_RETAIN(marker);
+    marker->m_objectID = 0x2c;
+    marker->setOpacity(0);
+    marker->setStartPos(pos);
+    cp->m_physicalCheckpointObject = marker;
     }
 
     std::string getSaveKey(int levelID) {
