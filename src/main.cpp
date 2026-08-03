@@ -21,7 +21,6 @@ namespace {
     std::array<double, ItemCount> g_baseGroupY{};
     std::array<bool, ItemCount> g_baseCaptured{};
 
-    bool g_smallStep = false;
 
     constexpr const char* Alphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -115,11 +114,6 @@ $execute {
             auto pl = PlayLayer::get();
 
             if (event.modifiers & KeyboardModifier::Control) {
-                if (event.modifiers & KeyboardModifier::Alt && event.key == cocos2d::enumKeyCodes::KEY_S) {
-                    g_smallStep = !g_smallStep;
-                    Notification::create(fmt::format("Small step: {}", g_smallStep ? "ON" : "OFF"), NotificationIcon::Success, 1.0f)->show();
-                    return ListenerResult::Propagate;
-                }
 
                 if (event.key == cocos2d::enumKeyCodes::KEY_C) {
                     if (!pl || !pl->m_effectManager) return ListenerResult::Propagate;
@@ -133,9 +127,9 @@ $execute {
 
                     auto ok = clipboard::write(formatWithDashes(raw));
                     if (ok) {
-                        Notification::create(fmt::format("Copied items {}-{}", SecondItemID, SecondItemID + ItemCount - 1), NotificationIcon::Success, 1.0f)->show();
+                        Notification::create(fmt::format("Copied Code"), NotificationIcon::Success, 1.0f)->show();
                     } else {
-                        Notification::create("Failed to write clipboard", NotificationIcon::Error, 1.0f)->show();
+                        Notification::create("Failed to Copy", NotificationIcon::Error, 1.0f)->show();
                     }
                 }
                 else if (event.key == cocos2d::enumKeyCodes::KEY_V) {
@@ -181,7 +175,10 @@ $execute {
                         }
                     }
 
-                    Notification::create(fmt::format("Pasted items {}-{}", FirstItemID, FirstItemID + ItemCount - 1), NotificationIcon::Success, 1.0f)->show();
+                    pl->m_effectManager->updateCountForItem(1242, 16);
+                    pl->updateCounters(1242, 16);   
+
+                    Notification::create(fmt::format("Pasted Code"), NotificationIcon::Success, 1.0f)->show();
                 }
             }
 
